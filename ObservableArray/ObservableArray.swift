@@ -148,6 +148,10 @@ extension ObservableArray: RangeReplaceableCollectionType {
         let oldCount = elements.count
         elements.replaceRange(subRange, with: newCollection)
         guard let first = subRange.first else {
+            // If replace is an insert send array change event
+            if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
+                arrayDidChange(ArrayChangeEvent(inserted: Array(0..<elements.count)))
+            }
             return
         }
         let newCount = elements.count
