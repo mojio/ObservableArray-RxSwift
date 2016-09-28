@@ -9,6 +9,6 @@ Pod::Spec.new do |s|
   s.source_files = "ObservableArray/*.swift"
   s.ios.deployment_target = "8.4"
   s.osx.deployment_target = "10.10"
-  s.dependency     "RxSwift", '~> 2.3.1'
+  s.dependency     "RxSwift", '~> 2.6.0'
   s.requires_arc = true
 end
