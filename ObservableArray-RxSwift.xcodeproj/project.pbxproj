@@ -243,9 +243,11 @@
 					};
 					8D8C92EA1C342014006B75DF = {
 						CreatedOnToolsVersion = 7.2;
+						LastSwiftMigration = 0800;
 					};
 					8D8C92F31C342014006B75DF = {
 						CreatedOnToolsVersion = 7.2;
+						LastSwiftMigration = 0800;
 					};
 					8D8C931E1C3428DF006B75DF = {
 						CreatedOnToolsVersion = 7.2;
@@ -557,6 +559,7 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 2.3;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -582,6 +585,7 @@
 				PRODUCT_NAME = ObservableArray;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 2.3;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
@@ -601,6 +605,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.blogspot.safx-dev.ObservableArrayTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 2.3;
 			};
 			name = Debug;
 		};
@@ -618,6 +623,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.blogspot.safx-dev.ObservableArrayTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 2.3;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
