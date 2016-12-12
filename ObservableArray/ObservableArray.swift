@@ -240,8 +240,9 @@ extension ObservableArray: RangeReplaceableCollectionType {
             }
         }
         
-        arrayDidChange(ArrayChangeEvent(inserted: inserted,
-                                         deleted: deleted))
+        if inserted.count > 0 || deleted.count > 0 {
+            arrayDidChange(ArrayChangeEvent(inserted: inserted, deleted: deleted))
+        }
     }
 
     public mutating func popLast() -> Element? {
