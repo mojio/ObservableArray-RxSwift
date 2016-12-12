@@ -26,6 +26,7 @@ public struct ArrayChangeEvent {
 public struct ObservableArray<Element>: ArrayLiteralConvertible {
     public typealias EventType = ArrayChangeEvent
 
+    internal let lockUpdateQueue = dispatch_queue_create(nil, DISPATCH_QUEUE_SERIAL)
     internal var eventSubject: PublishSubject<EventType>!
     internal var elementsSubject: BehaviorSubject<[Element]>!
     internal var elements: [Element]
@@ -48,17 +49,31 @@ public struct ObservableArray<Element>: ArrayLiteralConvertible {
 }
 
 extension ObservableArray {
+    public func getlockUpdateQueue() -> dispatch_queue_t {
+        return self.lockUpdateQueue
+    }
+}
+
+extension ObservableArray {
     public mutating func rx_elements() -> Observable<[Element]> {
-        if elementsSubject == nil {
-            self.elementsSubject = BehaviorSubject<[Element]>(value: self.elements)
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            if elementsSubject == nil {
+                self.elementsSubject = BehaviorSubject<[Element]>(value: self.elements)
+            }
         }
+        
         return elementsSubject
     }
 
     public mutating func rx_events() -> Observable<EventType> {
-        if eventSubject == nil {
-            self.eventSubject = PublishSubject<EventType>()
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            if eventSubject == nil {
+                self.eventSubject = PublishSubject<EventType>()
+            }
         }
+
         return eventSubject
     }
 
@@ -84,87 +99,164 @@ extension ObservableArray: RangeReplaceableCollectionType {
     }
 
     public mutating func reserveCapacity(minimumCapacity: Int) {
-        elements.reserveCapacity(minimumCapacity)
+        dispatch_sync(self.lockUpdateQueue) {
+            elements.reserveCapacity(minimumCapacity)
+        }
     }
 
     public mutating func append(newElement: Element) {
-        elements.append(newElement)
-        arrayDidChange(ArrayChangeEvent(inserted: [elements.count - 1]))
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            elements.append(newElement)
+            inserted = [elements.count - 1]
+        }
+
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
     public mutating func appendContentsOf<S : SequenceType where S.Generator.Element == Element>(newElements: S) {
-        let end = elements.count
-        elements.appendContentsOf(newElements)
-        guard end != elements.count else {
-            return
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let end = elements.count
+            elements.appendContentsOf(newElements)
+            guard end != elements.count else {
+                return
+            }
+
+            inserted = Array(end..<elements.count)
         }
-        arrayDidChange(ArrayChangeEvent(inserted: Array(end..<elements.count)))
+
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
     public mutating func appendContentsOf<C : CollectionType where C.Generator.Element == Element>(newElements: C) {
         guard !newElements.isEmpty else {
             return
         }
-        let end = elements.count
-        elements.appendContentsOf(newElements)
-        arrayDidChange(ArrayChangeEvent(inserted: Array(end..<elements.count)))
+        
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let end = elements.count
+            elements.appendContentsOf(newElements)
+            inserted = Array(end..<elements.count)
+        }
+        
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
     public mutating func removeLast() -> Element {
-        let e = elements.removeLast()
-        arrayDidChange(ArrayChangeEvent(deleted: [elements.count]))
-        return e
+        var e: Element? = nil
+        var deleted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            e = elements.removeLast()
+            deleted = [elements.count]
+        }
+
+        arrayDidChange(ArrayChangeEvent(deleted: deleted))
+        
+        // Item must exist
+        return e! as Element
     }
 
     public mutating func insert(newElement: Element, atIndex i: Int) {
-        elements.insert(newElement, atIndex: i)
-        arrayDidChange(ArrayChangeEvent(inserted: [i]))
+        var inserted: [Int] = []
+
+        dispatch_sync(self.lockUpdateQueue) {
+            elements.insert(newElement, atIndex: i)
+            inserted = [i]
+        }
+
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
     public mutating func removeAtIndex(index: Int) -> Element {
-        let e = elements.removeAtIndex(index)
-        arrayDidChange(ArrayChangeEvent(deleted: [index]))
-        return e
+        var e: Element? = nil
+        var deleted: [Int] = []
+
+        dispatch_sync(self.lockUpdateQueue) {
+            e = elements.removeAtIndex(index)
+            deleted = [index]
+        }
+        
+        arrayDidChange(ArrayChangeEvent(deleted: deleted))
+        
+        // Item must exist
+        return e! as Element
     }
 
     public mutating func removeAll(keepCapacity: Bool = false) {
         guard !elements.isEmpty else {
             return
         }
-        let es = elements
-        elements.removeAll(keepCapacity: keepCapacity)
-        arrayDidChange(ArrayChangeEvent(deleted: Array(0..<es.count)))
+        
+        var deleted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let es = elements
+            elements.removeAll(keepCapacity: keepCapacity)
+            deleted = Array(0..<es.count)
+        }
+
+        arrayDidChange(ArrayChangeEvent(deleted: deleted))
     }
 
     public mutating func insertContentsOf(newElements: [Element], atIndex i: Int) {
         guard !newElements.isEmpty else {
             return
         }
-        elements.insertContentsOf(newElements, at: i)
-        arrayDidChange(ArrayChangeEvent(inserted: Array(i..<i + newElements.count)))
+        
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            elements.insertContentsOf(newElements, at: i)
+            inserted = Array(i..<i + newElements.count)
+        }
+
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
     public mutating func replaceRange<C : CollectionType where C.Generator.Element == Element>(subRange: Range<Int>, with newCollection: C) {
-        let oldCount = elements.count
-        elements.replaceRange(subRange, with: newCollection)
-        guard let first = subRange.first else {
-            // If replace is an insert send array change event
-            if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
-                arrayDidChange(ArrayChangeEvent(inserted: Array(0..<elements.count)))
+
+        var inserted: [Int] = []
+        var deleted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let oldCount = elements.count
+            elements.replaceRange(subRange, with: newCollection)
+            
+            if let first = subRange.first {
+                let newCount = elements.count
+                let end = first + (newCount - oldCount) + subRange.count
+                inserted = Array(first..<end)
+                deleted = Array(subRange)
             }
-            return
+            else if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
+                // If replace is an insert send array change event
+                inserted = Array(0..<elements.count)
+            }
         }
-        let newCount = elements.count
-        let end = first + (newCount - oldCount) + subRange.count
-        arrayDidChange(ArrayChangeEvent(inserted: Array(first..<end),
-                                         deleted: Array(subRange)))
+        
+        arrayDidChange(ArrayChangeEvent(inserted: inserted,
+                                         deleted: deleted))
     }
 
     public mutating func popLast() -> Element? {
-        let e = elements.popLast()
-        if e != nil {
-            arrayDidChange(ArrayChangeEvent(deleted: [elements.count]))
+        var e: Element?
+        var deleted: [Int] = []
+
+        dispatch_sync(self.lockUpdateQueue) {
+            e = elements.popLast()
+            deleted = [elements.count]
         }
+
+        if let _ = e {
+            arrayDidChange(ArrayChangeEvent(deleted: deleted))
+        }
+
         return e
     }
 }
