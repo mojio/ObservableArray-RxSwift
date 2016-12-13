@@ -49,12 +49,6 @@ public struct ObservableArray<Element>: ArrayLiteralConvertible {
 }
 
 extension ObservableArray {
-    public func getlockUpdateQueue() -> dispatch_queue_t {
-        return self.lockUpdateQueue
-    }
-}
-
-extension ObservableArray {
     public mutating func rx_elements() -> Observable<[Element]> {
         
         dispatch_sync(self.lockUpdateQueue) {
@@ -301,5 +295,80 @@ extension ObservableArray: CollectionType {
             arrayDidChange(ArrayChangeEvent(inserted: Array(first..<first + newValue.count),
                                              deleted: Array(bounds)))
         }
+    }
+}
+
+// Predicate Methods
+extension ObservableArray {
+    public mutating func remove(predicate: (Element) -> Bool)  {
+        
+        var inserted: [Int] = []
+        var deleted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let newCollection = self.filter{includeElement in
+                !predicate(includeElement)
+            }
+            
+            let subRange = 0..<self.count
+            let oldCount = newCollection.count
+ 
+            elements.replaceRange(subRange, with: newCollection)
+            
+            if let first = subRange.first {
+                let newCount = elements.count
+                let end = first + (newCount - oldCount) + subRange.count
+                inserted = Array(first..<end)
+                deleted = Array(subRange)
+            }
+            else if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
+                // If replace is an insert send array change event
+                inserted = Array(0..<elements.count)
+            }
+        }
+        
+        if inserted.count > 0 || deleted.count > 0 {
+            arrayDidChange(ArrayChangeEvent(inserted: inserted, deleted: deleted))
+        }
+    }
+    
+    public mutating func insertAfter(newElement : Element, predicate : (Element) -> Bool) {
+        
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            if let index = self.indexOf(predicate) {
+                elements.insert(newElement, atIndex: index + 1)
+                inserted = [index + 1]
+            }
+            else {
+                elements.append(newElement)
+                inserted = [elements.count - 1]
+            }
+        }
+        
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
+    }
+    
+    public mutating func insertBefore(newElement : Element, predicate : (Element) -> Bool) {
+        
+        var inserted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            if let index = self.indexOf(predicate) {
+                elements.insert(newElement, atIndex: index)
+                inserted = [index]
+            }
+            else {
+                elements.append(newElement)
+                inserted = [elements.count - 1]
+            }
+        }
+        
+        arrayDidChange(ArrayChangeEvent(inserted: inserted))
+    }
+    
+    public func contains(predicate: (Element) -> Bool) -> Bool {
+        return self.indexOf(predicate) != nil
     }
 }
