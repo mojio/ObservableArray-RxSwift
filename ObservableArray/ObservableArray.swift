@@ -310,6 +310,11 @@ extension ObservableArray {
                 !predicate(includeElement)
             }
             
+            // Don't mutate unless there is a change - triggers excessive events
+            if newCollection.count == self.count {
+                return
+            }
+            
             let subRange = 0..<self.count
             let oldCount = newCollection.count
  
