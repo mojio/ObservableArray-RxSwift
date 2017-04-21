@@ -339,7 +339,7 @@ extension ObservableArray {
         }
     }
     
-    public mutating func insert(newElement : Element, after predicate : (Element) -> Bool) {
+    public mutating func insert(_ newElement : Element, after predicate : (Element) -> Bool) {
         
         var inserted: [Int] = []
         
@@ -357,7 +357,7 @@ extension ObservableArray {
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
     
-    public mutating func insert(newElement : Element, before predicate : (Element) -> Bool) {
+    public mutating func insert(_ newElement : Element, before predicate : (Element) -> Bool) {
         
         var inserted: [Int] = []
         
@@ -375,7 +375,7 @@ extension ObservableArray {
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
     
-    public func contains(predicate: (Element) -> Bool) -> Bool {
+    public func contains(where predicate: (Element) -> Bool) -> Bool {
         return self.index(where: predicate) != nil
     }
 }
