@@ -25,7 +25,7 @@ func rx_events() -> Observable<ArrayChangeEvent>
 
 ```swift
 var array: ObservableArray<String> = ["foo", "bar", "buzz"]
-array.rx_events().subscribeNext { print($0) }
+array.rx_elements().subscribeNext { print($0) }
 
 array.append("coffee")
 array[2] = "milk"
@@ -34,9 +34,12 @@ array.removeAll()
 
 This will print:
 
+    ["foo", "bar", "buzz"]
     ["foo", "bar", "buzz", "coffee"]
     ["foo", "bar", "milk", "coffee"]
     []
+
+Please note that `rx_elements()` emits the current items first when it has subscribed because it is implemented by using `BehaviorSubject`.
 
 `rx_elements` can work with `rx_itemsWithCellIdentifier`:
 

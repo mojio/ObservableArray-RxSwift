@@ -4,7 +4,6 @@
 //
 //  Created by Safx Developer on 2015/02/19.
 //  Copyright (c) 2016 Safx Developers. All rights reserved.
-// 
 //
 
 import Foundation
@@ -15,7 +14,7 @@ public struct ArrayChangeEvent {
     public let deletedIndices: [Int]
     public let updatedIndices: [Int]
 
-    private init(inserted: [Int] = [], deleted: [Int] = [], updated: [Int] = []) {
+    fileprivate init(inserted: [Int] = [], deleted: [Int] = [], updated: [Int] = []) {
         assert(inserted.count + deleted.count + updated.count > 0)
         self.insertedIndices = inserted
         self.deletedIndices = deleted
@@ -23,7 +22,7 @@ public struct ArrayChangeEvent {
     }
 }
 
-public struct ObservableArray<Element>: ArrayLiteralConvertible {
+public struct ObservableArray<Element>: ExpressibleByArrayLiteral {
     public typealias EventType = ArrayChangeEvent
 
     internal let lockUpdateQueue = dispatch_queue_create(nil, DISPATCH_QUEUE_SERIAL)
@@ -36,10 +35,10 @@ public struct ObservableArray<Element>: ArrayLiteralConvertible {
     }
 
     public init(count:Int, repeatedValue: Element) {
-        self.elements = Array(count: count, repeatedValue: repeatedValue)
+        self.elements = Array(repeating: repeatedValue, count: count)
     }
 
-    public init<S : SequenceType where S.Generator.Element == Element>(_ s: S) {
+    public init<S : Sequence>(_ s: S) where S.Iterator.Element == Element {
         self.elements = Array(s)
     }
 
@@ -71,13 +70,21 @@ extension ObservableArray {
         return eventSubject
     }
 
-    private func arrayDidChange(event: EventType) {
+    fileprivate func arrayDidChange(_ event: EventType) {
         elementsSubject?.onNext(elements)
         eventSubject?.onNext(event)
     }
 }
 
-extension ObservableArray: Indexable {
+extension ObservableArray: Collection {
+    public var capacity: Int {
+        return elements.capacity
+    }
+
+    /*public var count: Int {
+        return elements.count
+    }*/
+
     public var startIndex: Int {
         return elements.startIndex
     }
@@ -85,20 +92,20 @@ extension ObservableArray: Indexable {
     public var endIndex: Int {
         return elements.endIndex
     }
+
+    public func index(after i: Int) -> Int {
+        return elements.index(after: i)
+    }
 }
 
-extension ObservableArray: RangeReplaceableCollectionType {
-    public var capacity: Int {
-        return elements.capacity
-    }
-
-    public mutating func reserveCapacity(minimumCapacity: Int) {
+extension ObservableArray: MutableCollection {
+    public mutating func reserveCapacity(_ minimumCapacity: Int) {
         dispatch_sync(self.lockUpdateQueue) {
             elements.reserveCapacity(minimumCapacity)
         }
     }
 
-    public mutating func append(newElement: Element) {
+    public mutating func append(_ newElement: Element) {
         var inserted: [Int] = []
         
         dispatch_sync(self.lockUpdateQueue) {
@@ -109,12 +116,12 @@ extension ObservableArray: RangeReplaceableCollectionType {
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
-    public mutating func appendContentsOf<S : SequenceType where S.Generator.Element == Element>(newElements: S) {
+    public mutating func append<S : Sequence>(contentsOf newElements: S) where S.Iterator.Element == Element {
         var inserted: [Int] = []
         
         dispatch_sync(self.lockUpdateQueue) {
             let end = elements.count
-            elements.appendContentsOf(newElements)
+            elements.append(contentsOf: newElements)
             guard end != elements.count else {
                 return
             }
@@ -125,7 +132,7 @@ extension ObservableArray: RangeReplaceableCollectionType {
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
-    public mutating func appendContentsOf<C : CollectionType where C.Generator.Element == Element>(newElements: C) {
+    public mutating func appendContentsOf<C : Collection>(_ newElements: C) where C.Iterator.Element == Element {
         guard !newElements.isEmpty else {
             return
         }
@@ -134,7 +141,7 @@ extension ObservableArray: RangeReplaceableCollectionType {
         
         dispatch_sync(self.lockUpdateQueue) {
             let end = elements.count
-            elements.appendContentsOf(newElements)
+            elements.append(contentsOf: newElements)
             inserted = Array(end..<elements.count)
         }
         
@@ -156,23 +163,23 @@ extension ObservableArray: RangeReplaceableCollectionType {
         return e! as Element
     }
 
-    public mutating func insert(newElement: Element, atIndex i: Int) {
+    public mutating func insert(_ newElement: Element, at i: Int) {
         var inserted: [Int] = []
 
         dispatch_sync(self.lockUpdateQueue) {
-            elements.insert(newElement, atIndex: i)
+            elements.insert(newElement, at: i)
             inserted = [i]
         }
 
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
-    public mutating func removeAtIndex(index: Int) -> Element {
+    public mutating func remove(at index: Int) -> Element {
         var e: Element? = nil
         var deleted: [Int] = []
 
         dispatch_sync(self.lockUpdateQueue) {
-            e = elements.removeAtIndex(index)
+            e = elements.remove(at: index)
             deleted = [index]
         }
         
@@ -182,7 +189,7 @@ extension ObservableArray: RangeReplaceableCollectionType {
         return e! as Element
     }
 
-    public mutating func removeAll(keepCapacity: Bool = false) {
+    public mutating func removeAll(_ keepCapacity: Bool = false) {
         guard !elements.isEmpty else {
             return
         }
@@ -198,7 +205,7 @@ extension ObservableArray: RangeReplaceableCollectionType {
         arrayDidChange(ArrayChangeEvent(deleted: deleted))
     }
 
-    public mutating func insertContentsOf(newElements: [Element], atIndex i: Int) {
+    public mutating func insert(contentsOf newElements: [Element], at i: Int) {
         guard !newElements.isEmpty else {
             return
         }
@@ -206,37 +213,11 @@ extension ObservableArray: RangeReplaceableCollectionType {
         var inserted: [Int] = []
         
         dispatch_sync(self.lockUpdateQueue) {
-            elements.insertContentsOf(newElements, at: i)
+            elements.insert(contentsOf: newElements, at: i)
             inserted = Array(i..<i + newElements.count)
         }
 
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
-    }
-
-    public mutating func replaceRange<C : CollectionType where C.Generator.Element == Element>(subRange: Range<Int>, with newCollection: C) {
-
-        var inserted: [Int] = []
-        var deleted: [Int] = []
-        
-        dispatch_sync(self.lockUpdateQueue) {
-            let oldCount = elements.count
-            elements.replaceRange(subRange, with: newCollection)
-            
-            if let first = subRange.first {
-                let newCount = elements.count
-                let end = first + (newCount - oldCount) + subRange.count
-                inserted = Array(first..<end)
-                deleted = Array(subRange)
-            }
-            else if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
-                // If replace is an insert send array change event
-                inserted = Array(0..<elements.count)
-            }
-        }
-        
-        if inserted.count > 0 || deleted.count > 0 {
-            arrayDidChange(ArrayChangeEvent(inserted: inserted, deleted: deleted))
-        }
     }
 
     public mutating func popLast() -> Element? {
@@ -256,6 +237,33 @@ extension ObservableArray: RangeReplaceableCollectionType {
     }
 }
 
+extension ObservableArray: RangeReplaceableCollection {
+    public mutating func replaceSubrange<C : Collection>(_ subRange: Range<Int>, with newCollection: C) where C.Iterator.Element == Element {
+        var inserted: [Int] = []
+        var deleted: [Int] = []
+        
+        dispatch_sync(self.lockUpdateQueue) {
+            let oldCount = elements.count
+            elements.replaceSubrange(subRange, with: newCollection)
+            
+            if let first = subRange.lowerBound {
+                let newCount = elements.count
+                let end = first + (newCount - oldCount) + subRange.count
+                inserted = Array(first..<end)
+                deleted = Array(subRange)
+            }
+            else if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
+                // If replace is an insert send array change event
+                inserted = Array(0..<elements.count)
+            }
+        }
+        
+        if inserted.count > 0 || deleted.count > 0 {
+            arrayDidChange(ArrayChangeEvent(inserted: inserted, deleted: deleted))
+        }
+    }
+}
+
 extension ObservableArray: CustomDebugStringConvertible {
     public var description: String {
         return elements.description
@@ -268,7 +276,8 @@ extension ObservableArray: CustomStringConvertible {
     }
 }
 
-extension ObservableArray: CollectionType {
+extension ObservableArray: Sequence {
+
     public subscript(index: Int) -> Element {
         get {
             return elements[index]
@@ -289,11 +298,11 @@ extension ObservableArray: CollectionType {
         }
         set {
             elements[bounds] = newValue
-            guard let first = bounds.first else {
+            guard let first = bounds.lowerBound else {
                 return
             }
             arrayDidChange(ArrayChangeEvent(inserted: Array(first..<first + newValue.count),
-                                             deleted: Array(bounds)))
+                                            deleted: Array(bounds.lowerBound..<bounds.upperBound)))
         }
     }
 }
