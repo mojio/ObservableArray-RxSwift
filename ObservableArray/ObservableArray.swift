@@ -25,7 +25,7 @@ public struct ArrayChangeEvent {
 public struct ObservableArray<Element>: ExpressibleByArrayLiteral {
     public typealias EventType = ArrayChangeEvent
 
-    internal let lockUpdateQueue = dispatch_queue_create(nil, DISPATCH_QUEUE_SERIAL)
+    internal let lockUpdateQueue = DispatchQueue(label: "ObservableArrayLockUpdateQueue")
     internal var eventSubject: PublishSubject<EventType>!
     internal var elementsSubject: BehaviorSubject<[Element]>!
     internal var elements: [Element]
@@ -50,7 +50,7 @@ public struct ObservableArray<Element>: ExpressibleByArrayLiteral {
 extension ObservableArray {
     public mutating func rx_elements() -> Observable<[Element]> {
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             if elementsSubject == nil {
                 self.elementsSubject = BehaviorSubject<[Element]>(value: self.elements)
             }
@@ -61,7 +61,7 @@ extension ObservableArray {
 
     public mutating func rx_events() -> Observable<EventType> {
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             if eventSubject == nil {
                 self.eventSubject = PublishSubject<EventType>()
             }
@@ -100,7 +100,7 @@ extension ObservableArray: Collection {
 
 extension ObservableArray: MutableCollection {
     public mutating func reserveCapacity(_ minimumCapacity: Int) {
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             elements.reserveCapacity(minimumCapacity)
         }
     }
@@ -108,7 +108,7 @@ extension ObservableArray: MutableCollection {
     public mutating func append(_ newElement: Element) {
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             elements.append(newElement)
             inserted = [elements.count - 1]
         }
@@ -119,7 +119,7 @@ extension ObservableArray: MutableCollection {
     public mutating func append<S : Sequence>(contentsOf newElements: S) where S.Iterator.Element == Element {
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             let end = elements.count
             elements.append(contentsOf: newElements)
             guard end != elements.count else {
@@ -139,7 +139,7 @@ extension ObservableArray: MutableCollection {
         
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             let end = elements.count
             elements.append(contentsOf: newElements)
             inserted = Array(end..<elements.count)
@@ -152,7 +152,7 @@ extension ObservableArray: MutableCollection {
         var e: Element? = nil
         var deleted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             e = elements.removeLast()
             deleted = [elements.count]
         }
@@ -166,7 +166,7 @@ extension ObservableArray: MutableCollection {
     public mutating func insert(_ newElement: Element, at i: Int) {
         var inserted: [Int] = []
 
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             elements.insert(newElement, at: i)
             inserted = [i]
         }
@@ -178,7 +178,7 @@ extension ObservableArray: MutableCollection {
         var e: Element? = nil
         var deleted: [Int] = []
 
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             e = elements.remove(at: index)
             deleted = [index]
         }
@@ -189,16 +189,16 @@ extension ObservableArray: MutableCollection {
         return e! as Element
     }
 
-    public mutating func removeAll(_ keepCapacity: Bool = false) {
+    public mutating func removeAll(keepingCapacity keepCapacity: Bool = false) {
         guard !elements.isEmpty else {
             return
         }
         
         var deleted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             let es = elements
-            elements.removeAll(keepCapacity: keepCapacity)
+            elements.removeAll(keepingCapacity: keepCapacity)
             deleted = Array(0..<es.count)
         }
 
@@ -212,7 +212,7 @@ extension ObservableArray: MutableCollection {
         
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             elements.insert(contentsOf: newElements, at: i)
             inserted = Array(i..<i + newElements.count)
         }
@@ -224,7 +224,7 @@ extension ObservableArray: MutableCollection {
         var e: Element?
         var deleted: [Int] = []
 
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             e = elements.popLast()
             deleted = [elements.count]
         }
@@ -242,20 +242,15 @@ extension ObservableArray: RangeReplaceableCollection {
         var inserted: [Int] = []
         var deleted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             let oldCount = elements.count
             elements.replaceSubrange(subRange, with: newCollection)
             
-            if let first = subRange.lowerBound {
-                let newCount = elements.count
-                let end = first + (newCount - oldCount) + subRange.count
-                inserted = Array(first..<end)
-                deleted = Array(subRange)
-            }
-            else if newCollection.count > 0 && elements.count > 0 && subRange.count == 0 {
-                // If replace is an insert send array change event
-                inserted = Array(0..<elements.count)
-            }
+            let first = subRange.lowerBound
+            let newCount = elements.count
+            let end = first + (newCount - oldCount) + subRange.count
+            inserted = Array(first..<end)
+            deleted = Array(subRange.lowerBound..<subRange.upperBound)
         }
         
         if inserted.count > 0 || deleted.count > 0 {
@@ -298,9 +293,7 @@ extension ObservableArray: Sequence {
         }
         set {
             elements[bounds] = newValue
-            guard let first = bounds.lowerBound else {
-                return
-            }
+            let first = bounds.lowerBound
             arrayDidChange(ArrayChangeEvent(inserted: Array(first..<first + newValue.count),
                                             deleted: Array(bounds.lowerBound..<bounds.upperBound)))
         }
@@ -309,12 +302,12 @@ extension ObservableArray: Sequence {
 
 // Predicate Methods
 extension ObservableArray {
-    public mutating func remove(predicate: (Element) -> Bool)  {
+    public mutating func remove(where predicate: (Element) -> Bool)  {
         
         var inserted: [Int] = []
         var deleted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
+        self.lockUpdateQueue.sync {
             let newCollection = self.filter{includeElement in
                 !predicate(includeElement)
             }
@@ -327,7 +320,7 @@ extension ObservableArray {
             let subRange = 0..<self.count
             let oldCount = newCollection.count
  
-            elements.replaceRange(subRange, with: newCollection)
+            elements.replaceSubrange(subRange, with: newCollection)
             
             if let first = subRange.first {
                 let newCount = elements.count
@@ -346,13 +339,13 @@ extension ObservableArray {
         }
     }
     
-    public mutating func insertAfter(newElement : Element, predicate : (Element) -> Bool) {
+    public mutating func insert(newElement : Element, after predicate : (Element) -> Bool) {
         
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
-            if let index = self.indexOf(predicate) {
-                elements.insert(newElement, atIndex: index + 1)
+        self.lockUpdateQueue.sync {
+            if let index = self.index(where: predicate) {
+                elements.insert(newElement, at: index + 1)
                 inserted = [index + 1]
             }
             else {
@@ -364,13 +357,13 @@ extension ObservableArray {
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
     
-    public mutating func insertBefore(newElement : Element, predicate : (Element) -> Bool) {
+    public mutating func insert(newElement : Element, before predicate : (Element) -> Bool) {
         
         var inserted: [Int] = []
         
-        dispatch_sync(self.lockUpdateQueue) {
-            if let index = self.indexOf(predicate) {
-                elements.insert(newElement, atIndex: index)
+        self.lockUpdateQueue.sync {
+            if let index = self.index(where: predicate) {
+                elements.insert(newElement, at: index)
                 inserted = [index]
             }
             else {
@@ -383,6 +376,6 @@ extension ObservableArray {
     }
     
     public func contains(predicate: (Element) -> Bool) -> Bool {
-        return self.indexOf(predicate) != nil
+        return self.index(where: predicate) != nil
     }
 }
