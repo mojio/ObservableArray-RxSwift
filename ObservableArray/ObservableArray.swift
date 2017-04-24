@@ -96,6 +96,14 @@ extension ObservableArray: Collection {
     public func index(after i: Int) -> Int {
         return elements.index(after: i)
     }
+    
+    public var first: Element? {
+        return elements.first
+    }
+    
+    public var last: Element? {
+        return elements.last
+    }
 }
 
 extension ObservableArray: MutableCollection {
