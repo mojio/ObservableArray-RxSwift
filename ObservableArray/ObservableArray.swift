@@ -137,6 +137,7 @@ extension ObservableArray: MutableCollection {
             inserted = Array(end..<elements.count)
         }
 
+        guard inserted.count > 0 else { return }
         arrayDidChange(ArrayChangeEvent(inserted: inserted))
     }
 
