@@ -387,4 +387,23 @@ extension ObservableArray {
     public func contains(where predicate: (Element) -> Bool) -> Bool {
         return self.index(where: predicate) != nil
     }
+    
+    public mutating func replaceFirst(where predicate: (Element) -> Bool, with element: Element) {
+        var inserted: [Int] = []
+        var deleted: [Int] = []
+        
+        self.lockUpdateQueue.sync {
+            
+            if let index = self.index(where: predicate) {
+                
+                elements.replaceSubrange(index..<index+1, with: [element])
+                inserted.append(index)
+                deleted.append(index)
+            }
+        }
+        
+        if inserted.count > 0 || deleted.count > 0 {
+            arrayDidChange(ArrayChangeEvent(inserted: inserted, deleted: deleted))
+        }
+    }
 }
