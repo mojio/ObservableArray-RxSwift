@@ -760,7 +760,7 @@ class ObservableArrayTests: XCTestCase {
     
     func testSubscriptRangeRxEvent() {
         var a: ObservableArray<String> = ["foo", "bar", "buzz"]
-        
+
         let exp = expectation(description: "event emitted")
         a.rx_events().subscribe { (eventObject) -> Void in
             guard let event = eventObject.element else { return XCTFail() }
