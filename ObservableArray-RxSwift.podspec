@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.homepage     = "https://github.com/safx/ObservableArray-RxSwift"
   s.license      = { :type => "MIT", :file => "LICENSE" }
   s.author       = { "MATSUMOTO Yuji" => "safxdev@gmail.com" }
-  s.source       = { :git => "https://bitbucket.org/mojio/observablearray-rxswift", :tag => s.version }
+  s.source       = { :git => "https://github.com/mojio/ObservableArray-RxSwift", :tag => s.version }
   s.source_files = "ObservableArray/*.swift"
   s.ios.deployment_target = "8.4"
   s.osx.deployment_target = "10.10"
